@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "dgSpecHash": "Z8kt8dvMxIA=",
+  "success": true,
+  "projectFilePath": "C:\\Users\\vitor\\OneDrive\\Documentos\\Códigos\\Trabalhos\\status-quote-alert\\status-quote-alert.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\vitor\\.nuget\\packages\\newtonsoft.json\\13.0.4\\newtonsoft.json.13.0.4.nupkg.sha512"
+  ],
+  "logs": []
+}

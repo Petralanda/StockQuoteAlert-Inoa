@@ -1,0 +1,10 @@
+{
+    "Host": "smtp.<dominio>.com",
+    "Port": 587,
+    "EnableSsl": true, 
+    "UseDefaultCredentials": false,
+    "FromAddress": "<your_user>@<dominio>.com",
+    "Password": "<your_password>",
+    "ToAddress": "<to_user>@<dominio>.com",
+    "brapi_token": "<your_brapi_token>"
+}

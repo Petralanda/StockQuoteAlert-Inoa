@@ -23,6 +23,7 @@ O sistema possui lógica inteligente para evitar envio de múltiplos alertas con
 ## Pré-requisitos
 
 - .NET SDK e runtime instalado (versão 9.0 ou superior recomendada)
+- Ambiente Windows para utilizar o .exe conforme orientado
 - Token da API BRAPI (obtenha em [brapi.dev](https://brapi.dev))
 - Conta de email com acesso SMTP configurado
 

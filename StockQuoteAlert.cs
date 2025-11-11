@@ -6,7 +6,7 @@ using System.Globalization; // garantir que o buy e o sell passando em args seja
 
 class StockQuoteAlert
 {
-        public class Configs
+    public class Configs
     {
         public string Host { get; set; } = string.Empty;
         public int Port { get; set; } = 587;

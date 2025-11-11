@@ -42,7 +42,7 @@ Crie um arquivo `config.json` na raiz do projeto com o seguinte conteúdo:
     "Password": "<your_password>",
     "ToAddress": "<to_user>@<dominio>.com",
     "brapi_token": "<your_brapi_token>",
-    "setTimeOut": 10000 // em milisegundo 
+    "setTimeOut": 10000 
 }
 ```
 

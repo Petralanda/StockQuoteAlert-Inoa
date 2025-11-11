@@ -3,13 +3,13 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net9.0</TargetFramework>
-    <RootNamespace>statusQuoteAlert_Inoa</RootNamespace>
+    <RootNamespace>stockQuoteAlert</RootNamespace>
+    <AssemblyName>stock-quote-alert</AssemblyName>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
-  <ItemGroup>
-    <PackageReference Include="MailKit" Version="4.14.1" />
-  </ItemGroup>
 
 </Project>

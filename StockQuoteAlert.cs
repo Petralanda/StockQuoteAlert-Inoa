@@ -2,21 +2,11 @@
 using System.Net;  // Para NetworkCredential
 using System.Net.Mail;
 using System.Text.Json.Nodes; // parse da resposta json da requisicao
+using System.Globalization; // garantir que o buy e o sell passando em args seja padrao global
 
 class StockQuoteAlert
 {
-    public class PriceTimeData
-    {
-        public float Price { get; set; }
-        public string Time { get; set; } = string.Empty;
-        public PriceTimeData(float price, string time)
-        {
-            Price = price;
-            Time = time;
-        }
-    }
-
-    public class Configs
+        public class Configs
     {
         public string Host { get; set; } = string.Empty;
         public int Port { get; set; } = 587;
@@ -26,18 +16,22 @@ class StockQuoteAlert
         public string Password { get; set; } = string.Empty;
         public string ToAddress { get; set; } = string.Empty;
         public string brapi_token { get; set; } = string.Empty;
+        public long setTimeOut { get; set; } = 10000;
     }   
-    public static Configs getConfigs()
+    public static Configs GetConfigs()
     {
         string jsonString = File.ReadAllText("config.json");
         var cfg = JsonSerializer.Deserialize<Configs>(jsonString);
-        if (cfg == null) throw new InvalidOperationException("config.json inválido.");
+        if (cfg == null) 
+        {
+            throw new InvalidOperationException("config.json inválido.");
+        }
         return cfg;
     }
 
-    static async Task sendEmail(string subject, string body)
+    static async Task SendEmail(string subject, string body)
     {
-        Configs config = getConfigs();
+        Configs config = GetConfigs();
 
         using (var smtp = new SmtpClient())
         {
@@ -49,7 +43,7 @@ class StockQuoteAlert
 
             using (var msg = new MailMessage())
             {
-                msg.From = new MailAddress(config.FromAddress, "Alert-Status-Quote");
+                msg.From = new MailAddress(config.FromAddress, "Stock Quote Alert");
                 msg.To.Add(config.ToAddress);
                 msg.Subject = subject;
                 msg.Body = body;
@@ -58,7 +52,7 @@ class StockQuoteAlert
                 try
                 {
                     await smtp.SendMailAsync(msg);
-                    Console.WriteLine("Email enviado com sucesso.");
+                    Console.Write("Email de ");
                 }
                 catch (Exception ex)
                 {
@@ -68,7 +62,7 @@ class StockQuoteAlert
             }
         }
     }
-    static async Task<PriceTimeData?> getMarketPrice(string ticket, string token = "")
+    static async Task<float> GetMarketPrice(string ticket, string token = "")
     {
         string url = $"https://brapi.dev/api/quote/{ticket}";
         if (!string.IsNullOrEmpty(token)) url += $"?token={token}";
@@ -83,14 +77,13 @@ class StockQuoteAlert
 
                 var result = root["results"]![0]!;
                 float price = result["regularMarketPrice"]!.GetValue<float>();
-                string time = result["regularMarketTime"]!.GetValue<string>();
 
-                return new PriceTimeData(price, time);
+                return price;
             }
             catch (System.Exception e)
             {
                 Console.WriteLine($"Erro: {e.Message}");
-                return null;
+                return -1;
             }
         }
     }
@@ -103,70 +96,61 @@ class StockQuoteAlert
             return;
         }
         string ticket = args[0]; 
-        float buy = float.Parse(args[1]);
-        float sell = float.Parse(args[2]);
+        float sell = float.Parse(args[1], CultureInfo.InvariantCulture);
+        float buy = float.Parse(args[2], CultureInfo.InvariantCulture);
 
-        var config = getConfigs();
-        
+        var config = GetConfigs();
+
         string token = config.brapi_token;
-        bool hasReachedBuy = false; 
-        bool hasReachedSell = false; 
+        long setTimeOut = config.setTimeOut;
         bool buyAlertSent = false;   
         bool sellAlertSent = false; 
         string body = "";
-        int i = 0;
+        int i = 1;
 
-        Console.WriteLine($"Monitorando {ticket} - Compra: R$ {buy:F2} | Venda: R$ {sell:F2}");
+        Console.WriteLine($"Monitorando {ticket} - venda: R$ {sell:F2} | compra: R$ {buy:F2}");
 
         while (true)
         {
-            var result = await getMarketPrice(ticket, token);
+            var price = await GetMarketPrice(ticket, token);
             
-            if(result == null) {
-                Console.WriteLine("Erro ao obter a cotação. Tentando novamente...");
+            if(price == -1) {
+                Console.WriteLine("Erro ao obter a cotação. Tentando novamente..."); // debug
                 break;
             }
             
-            Console.WriteLine($"[{i++}] {ticket} = R$ {result.Price:F2} (Horário: {result.Time})");
+            Console.WriteLine($"[{i++} Tentativa] {ticket} = R$ {price:F2} ");
 
-            // logica para alerta de compra
-            if(result.Price >= buy)
+            // logica para alerta de compra (preço baixo, oportunidade de compra)
+            if(price < buy && !buyAlertSent)
             {
-                hasReachedBuy = true;
-                if (!buyAlertSent)
-                {
-                    body = $"Ação {ticket} atingiu o valor de compra: R$ {result.Price:F2}";
-                    // await sendEmail($"Alerta de Compra - {ticket}", body);
-                    Console.WriteLine($"ALERTA DE COMPRA ENVIADO");
-                    buyAlertSent = true;
-                    sellAlertSent = false; 
-                }
+                body = $"Ação {ticket} está com preço baixo para compra: R$ {price:F2}, dado o limite de compra {buy:F2}";
+                await SendEmail($"Alerta de Compra - {ticket}", body);
+                Console.WriteLine("compra enviado com sucesso");
+                buyAlertSent = true;
             }
-            // so pode enviar novo alerta de compra se o preço subir novamente apos ter caido abaixo do valor de compra
-            else if (hasReachedBuy && result.Price < buy)
+            // logica para alerta de venda (preço alto, oportunidade de venda)
+            if(price > sell && !sellAlertSent)
+            {
+                body = $"Ação {ticket} está com preço alto para venda: R$ {price:F2}, dado o limite de venda {sell:f2}";
+                await SendEmail($"Alerta de Venda - {ticket}", body);
+                Console.WriteLine("venda enviado com sucesso");
+                sellAlertSent = true;
+            }
+            
+            // reseta o flag de compra quando o preço volta para cima do limite
+            if (buyAlertSent && price >= buy)
             {
                 buyAlertSent = false;
             }
-            // logica para alerta de venda
-            if(result.Price <= sell)
-            {
-                hasReachedSell = true;
-                if (!sellAlertSent)
-                {
-                    body = $"Ação {ticket} atingiu o valor de venda: R$ {result.Price:F2} em {result.Time}";
-                    // await sendEmail($"Alerta de Venda - {ticket}", body);
-                    Console.WriteLine("ALERTA DE VENDA ENVIADO");
-                    sellAlertSent = true;
-                    buyAlertSent = false;
-                }
-            }
-            // so pode enviar novo alerta de venda se o preço descer novamente apos ter subido acima do valor de venda
-            else if (hasReachedSell && result.Price > sell)
+            
+            // reseta o flag de venda quando o preço volta para baixo do limite
+            if (sellAlertSent && price <= sell)
             {
                 sellAlertSent = false;
             }
             
-            await Task.Delay(10000); // aguarda 10 segundos antes da próxima consulta para evitar limite de requisicoes
+            await Task.Delay(TimeSpan.FromMilliseconds(setTimeOut)); // aguarda setTimeOut em ms ate a proxima tentativa
         }
 
     }

@@ -17,11 +17,12 @@ O sistema possui lógica inteligente para evitar envio de múltiplos alertas con
 - System.Net.Http (requisições HTTP)
 - System.Net;  (Para NetworkCredential)
 - System.Text.Json (processamento JSON)
+- System.Globalization (garantir padronizacao dos valores passados na linha de comando na execucao)
 - API BRAPI (cotações da B3)
 
 ## Pré-requisitos
 
-- .NET SDK instalado (versão 6.0 ou superior recomendada)
+- .NET SDK e runtime instalado (versão 9.0 ou superior recomendada)
 - Token da API BRAPI (obtenha em [brapi.dev](https://brapi.dev))
 - Conta de email com acesso SMTP configurado
 
@@ -40,7 +41,8 @@ Crie um arquivo `config.json` na raiz do projeto com o seguinte conteúdo:
     "FromAddress": "<your_user>@<dominio>.com",
     "Password": "<your_password>",
     "ToAddress": "<to_user>@<dominio>.com",
-    "brapi_token": "<your_brapi_token>"
+    "brapi_token": "<your_brapi_token>",
+    "setTimeOut": 10000 // em milisegundo 
 }
 ```
 
@@ -57,11 +59,20 @@ Crie um arquivo `config.json` na raiz do projeto com o seguinte conteúdo:
 - **Password**: Senha do email ou senha de aplicativo
 - **ToAddress**: Email destinatário dos alertas
 - **brapi_token**: Token de acesso da API BRAPI
+- **setTimeOut**: Intervalo de tempo em milisegundos entre as requisicoes
 
-## 🔨 Compilação
+## Compilação
+
+Caso ja tenha o .NET runtime instalado, pode utilizar o comando a seguir:
 
 ```bash
-dotnet build
+dotnet publish -c Release -r win-x64 --self-contained false /p:PublishSingleFile=true -o .
+```
+
+Porém pode utilizar outro comando de build mais pesada com as libs base e sem precisar do .NET runtime, dado por:
+
+```bash
+dotnet publish -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true -o .
 ```
 
 ## Uso
@@ -69,53 +80,92 @@ dotnet build
 Execute o programa passando três argumentos:
 
 ```bash
-stock-quote-alert.exe <TICKET> <preco_compra> <preco_venda>
+.\stock-quote-alert.exe <TICKET> <preco_venda> <preco_compra> 
 ```
 
 ### Parâmetros:
 
 - **TICKET**: Código da ação (ex: PETR4, VALE3, ITUB4)
-- **preco_compra**: Preço alvo para alerta de compra
-- **preco_venda**: Preço alvo para alerta de venda
+- **preco_venda**: Preço limite para alerta de venda (primeiro argumento)
+- **preco_compra**: Preço limite para alerta de compra (segundo argumento)
 
 
-## Funcionamento
+## Arquitetura e Funções
 
-1. O programa consulta a cotação da ação a cada **10 segundos**
-2. Exibe no console o preço atual e horário da cotação
-3. Quando o preço atinge o valor de compra ou venda:
-   - Envia um email de alerta
-   - Exibe mensagem no console
-4. Novos alertas só são enviados quando:
-   - **Compra**: preço cai abaixo do limite e depois sobe novamente
-   - **Venda**: preço sobe acima do limite e depois cai novamente
+### 1. `GetConfigs()`
+Função estática responsável por:
+- Leitura do arquivo `config.json`
+- Deserialização das configurações em objeto `Configs`
+- Validação da existência das configurações
+- Retorno das configurações para uso nas demais funções
+
+### 2. `SendEmail(string subject, string body)`
+Função assíncrona para envio de emails que:
+- Carrega configurações SMTP via `GetConfigs()`
+- Configura cliente SMTP com credenciais e parâmetros de segurança
+- Cria e envia mensagem de email com assunto e corpo personalizados
+- Trata exceções de envio e exibe feedback no console
+- Utiliza `using` para disposal adequado de recursos
+
+### 3. `GetMarketPrice(string ticket, string token)`
+Função assíncrona para obtenção de cotações que:
+- Constrói URL da API BRAPI com ticker da ação e token opcional
+- Executa requisição HTTP GET para a API
+- Processa resposta JSON e extrai o preço regular do mercado
+- Retorna preço como `float` ou `-1` em caso de erro
+- Trata exceções de rede e parsing JSON
+
+### 4. `Main(string[] args)`
+Função principal que orquestra o monitoramento:
+- **Validação**: Verifica argumentos da linha de comando (ticker, preço venda, preço compra)
+- **Inicialização**: Carrega configurações e inicializa variáveis de controle
+- **Loop Principal**: Executa indefinidamente o monitoramento com as seguintes etapas:
+  - Consulta preço atual via `GetMarketPrice()`
+  - Exibe informações no console com contador de tentativas
+  - **Lógica de Compra**: Se `preço < limite_compra` e alerta não enviado → envia email de compra
+  - **Lógica de Venda**: Se `preço > limite_venda` e alerta não enviado → envia email de venda  
+  - **Reset de Flags**: Reseta flags quando preço retorna aos limites para permitir novos alertas
+  - **Delay**: Aguarda intervalo configurável (`setTimeOut`) antes da próxima consulta
+
+## Funcionamento Detalhado
+
+### Fluxo de Monitoramento
+1. Sistema consulta cotação da ação no intervalo configurado (padrão: 10 segundos)
+2. Compara preço atual com limites de compra e venda definidos
+3. Envia alertas por email quando condições são atendidas
+4. Previne spam através de flags de controle (`buyAlertSent`, `sellAlertSent`)
+5. Permite novos alertas apenas após preço sair e retornar às condições
+
+### Lógica de Alertas
+- **Alerta de Compra**: Disparado quando preço < limite de compra (oportunidade de compra)
+- **Alerta de Venda**: Disparado quando preço > limite de venda (oportunidade de venda)
+- **Ambos alertas podem ser enviados na mesma iteração** se condições forem atendidas
+- **Reset automático**: Flags são resetados quando preço normaliza
 
 ## Formato dos Alertas
 
 ### Alerta de Compra
 - **Assunto**: `Alerta de Compra - [TICKET]`
-- **Corpo**: `Ação [TICKET] atingiu o valor de compra: R$ [PREÇO]`
+- **Corpo**: `Ação [TICKET] está com preço baixo para compra: R$ [PREÇO], dado o limite de compra [LIMITE]`
+- **Console**: `"compra enviado com sucesso"`
 
 ### Alerta de Venda
 - **Assunto**: `Alerta de Venda - [TICKET]`
-- **Corpo**: `Ação [TICKET] atingiu o valor de venda: R$ [PREÇO] em [HORÁRIO]`
+- **Corpo**: `Ação [TICKET] está com preço alto para venda: R$ [PREÇO], dado o limite de venda [LIMITE]`
+- **Console**: `"venda enviado com sucesso"`
 
-## Personalização
-
-### Alterar Intervalo de Consulta
-
-No código, localize a linha:
-```csharp
-await Task.Delay(10000); // 10 segundos
+### Exemplo de Saída Console
 ```
-
-Modifique o valor (em milissegundos):
-- 5 segundos: `5000`
-- 30 segundos: `30000`
-- 1 minuto: `60000`
+Monitorando PETR4 - venda: R$ 30,00 | compra: R$ 35,00
+[1 Tentativa] PETR4 = R$ 32,36
+[2 Tentativa] PETR4 = R$ 28,50
+Email de compra enviado com sucesso
+[3 Tentativa] PETR4 = R$ 41,20  
+Email de venda enviado com sucesso
+```
 
 
 ## Considerações finais
 
 - Certifique-se de que editar o `config.json` com suas credenciais e configurações SMTP
-- A API BRAPI no plano gratuito possui limites de requisições e suas ações são atualizadas apenas de 30 em 30 minutos, sendo ela a escolhida apenas para fins de testes para desenvolvimento por falta de opções melhores.
+- A API BRAPI no plano gratuito possui limites de requisições e suas ações são atualizadas apenas de 30 em 30 minutos, sendo ela a escolhida apenas para fins de testes para desenvolvimento e por falta de opções melhores.

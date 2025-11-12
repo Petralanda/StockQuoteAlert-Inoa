@@ -15,7 +15,7 @@ class StockQuoteAlert
         public string FromAddress { get; set; } = string.Empty;
         public string Password { get; set; } = string.Empty;
         public string ToAddress { get; set; } = string.Empty;
-        public string brapi_token { get; set; } = string.Empty;
+        public string brapiToken { get; set; } = string.Empty;
         public long setTimeOut { get; set; } = 10000;
     }   
     public static Configs GetConfigs()
@@ -92,7 +92,7 @@ class StockQuoteAlert
     {
         if (args.Length != 3)
         {
-            Console.WriteLine("Uso correto: stock-quote-alert.exe <TICKET> <preco_compra> <preco_venda>");
+            Console.WriteLine("Uso correto: stock-quote-alert.exe <TICKET> <preco_venda> <preco_compra>");
             return;
         }
         string ticket = args[0]; 
@@ -101,7 +101,7 @@ class StockQuoteAlert
 
         var config = GetConfigs();
 
-        string token = config.brapi_token;
+        string token = config.brapiToken;
         long setTimeOut = config.setTimeOut;
         bool buyAlertSent = false;   
         bool sellAlertSent = false; 
@@ -116,7 +116,7 @@ class StockQuoteAlert
             
             if(price == -1) {
                 Console.WriteLine("Erro ao obter a cotação. Tentando novamente..."); // debug
-                break;
+                continue;
             }
             
             Console.WriteLine($"[{i++} Tentativa] {ticket} = R$ {price:F2} ");

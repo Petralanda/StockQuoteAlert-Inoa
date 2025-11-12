@@ -42,7 +42,7 @@ Crie um arquivo `config.json` na raiz do projeto com o seguinte conteúdo:
     "FromAddress": "<your_user>@<dominio>.com",
     "Password": "<your_password>",
     "ToAddress": "<to_user>@<dominio>.com",
-    "brapi_token": "<your_brapi_token>",
+    "brapiToken": "<your_brapi_token>",
     "setTimeOut": 10000 
 }
 ```
@@ -157,12 +157,12 @@ Função principal que orquestra o monitoramento:
 
 ### Exemplo de Saída Console
 ```
-Monitorando PETR4 - venda: R$ 30,00 | compra: R$ 35,00
-[1 Tentativa] PETR4 = R$ 32,36
-[2 Tentativa] PETR4 = R$ 28,50
-Email de compra enviado com sucesso
-[3 Tentativa] PETR4 = R$ 41,20  
-Email de venda enviado com sucesso
+Monitorando PETR4 - venda: R$ 35,00 | compra: R$ 28,00
+[1ª tentativa] PETR4 = R$ 32,36
+[2ª tentativa] PETR4 = R$ 27,90
+Alerta de compra enviado com sucesso
+[3ª tentativa] PETR4 = R$ 36,10
+Alerta de venda enviado com sucesso
 ```
 
 
